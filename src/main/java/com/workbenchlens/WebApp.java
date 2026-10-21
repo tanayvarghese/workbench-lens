@@ -111,7 +111,7 @@ public final class WebApp {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt(); send(exchange, 503, "application/json", "{\"error\":\"The local AI request was interrupted.\"}");
         } catch (IOException e) {
-            send(exchange, 502, "application/json", "{\"error\":\"Could not reach local Ollama. Check that Ollama is running with qwen2.5vl:3b available.\"}");
+            send(exchange, 502, "application/json", "{\"error\":\"Could not reach local Ollama. Check that Ollama is running with minicpm-v available.\"}");
         }
     }
 

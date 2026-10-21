@@ -14,7 +14,7 @@ import java.util.Map;
 
 /** Shared client for local Ollama text and vision requests. */
 public class OllamaClient {
-    private static final String MODEL = "qwen2.5vl:3b";
+    private static final String MODEL = "minicpm-v";
     private static final URI ENDPOINT = URI.create("http://localhost:11434/api/generate");
     private static final ObjectMapper JSON = new ObjectMapper();
     private final HttpClient client = HttpClient.newBuilder()
