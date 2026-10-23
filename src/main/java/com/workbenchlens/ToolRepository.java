@@ -52,20 +52,9 @@ public class ToolRepository {
         List<Tool> loadedTools = new ArrayList<>();
 
         String sql = """
-                SELECT t.name, t.category, t.purpose, t.safety_notes,
-                       t.verification_status,
-                       COALESCE(g.catalogue_group, 'Unassigned') AS catalogue_group
-                FROM tools t
-                LEFT JOIN (
-                    SELECT tool_id, 'Electrical tools' AS catalogue_group FROM electrical_tools
-                    UNION ALL
-                    SELECT tool_id, 'Handheld tools' FROM handheld_tools
-                    UNION ALL
-                    SELECT tool_id, 'Waterworks tools' FROM waterworks_tools
-                    UNION ALL
-                    SELECT tool_id, 'Measuring / miscellaneous / dangerous' FROM measuring_misc_dangerous
-                ) g ON g.tool_id = t.tool_id
-                ORDER BY t.tool_id
+                SELECT name, category, purpose, safety_notes, verification_status
+                FROM tools
+                ORDER BY tool_id
                 """;
 
         try (Connection connection =
@@ -79,17 +68,16 @@ public class ToolRepository {
                 String purpose = results.getString("purpose");
                 String safetyNotes = results.getString("safety_notes");
                 String status = results.getString("verification_status");
-                String catalogueGroup = results.getString("catalogue_group");
 
                 if ("Hand tool".equalsIgnoreCase(category)) {
                     loadedTools.add(new HandTool(
-                            name, category, purpose, safetyNotes, status, catalogueGroup));
+                            name, category, purpose, safetyNotes, status));
                 } else if ("Power tool".equalsIgnoreCase(category)) {
                     loadedTools.add(new PowerTool(
-                            name, category, purpose, safetyNotes, status, catalogueGroup));
+                            name, category, purpose, safetyNotes, status));
                 } else if ("Measuring tool".equalsIgnoreCase(category)) {
                     loadedTools.add(new MeasuringTool(
-                            name, category, purpose, safetyNotes, status, catalogueGroup));
+                            name, category, purpose, safetyNotes, status));
                 } else {
                     throw new SQLException("Unknown tool category: " + category);
                 }

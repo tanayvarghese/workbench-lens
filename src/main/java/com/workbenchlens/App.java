@@ -17,16 +17,14 @@ abstract class Tool {
     private final String purpose;
     private final String safetyNotes;
     private final String verificationStatus;
-    private final String catalogueGroup;
 
     public Tool(String name, String category, String purpose,
-                String safetyNotes, String verificationStatus, String catalogueGroup) {
+                String safetyNotes, String verificationStatus) {
         this.name = name;
         this.category = category;
         this.purpose = purpose;
         this.safetyNotes = safetyNotes;
         this.verificationStatus = verificationStatus;
-        this.catalogueGroup = catalogueGroup;
     }
 
     public String getName() {
@@ -48,28 +46,26 @@ abstract class Tool {
     public String getVerificationStatus() {
         return verificationStatus;
     }
-
-    public String getCatalogueGroup() { return catalogueGroup; }
 }
 
 class HandTool extends Tool {
     public HandTool(String name, String category, String purpose,
-                    String safetyNotes, String verificationStatus, String catalogueGroup) {
-        super(name, category, purpose, safetyNotes, verificationStatus, catalogueGroup);
+                    String safetyNotes, String verificationStatus) {
+        super(name, category, purpose, safetyNotes, verificationStatus);
     }
 }
 
 class PowerTool extends Tool {
     public PowerTool(String name, String category, String purpose,
-                     String safetyNotes, String verificationStatus, String catalogueGroup) {
-        super(name, category, purpose, safetyNotes, verificationStatus, catalogueGroup);
+                     String safetyNotes, String verificationStatus) {
+        super(name, category, purpose, safetyNotes, verificationStatus);
     }
 }
 
 class MeasuringTool extends Tool {
     public MeasuringTool(String name, String category, String purpose,
-                         String safetyNotes, String verificationStatus, String catalogueGroup) {
-        super(name, category, purpose, safetyNotes, verificationStatus, catalogueGroup);
+                         String safetyNotes, String verificationStatus) {
+        super(name, category, purpose, safetyNotes, verificationStatus);
     }
 }
 
@@ -114,7 +110,7 @@ class ToolCatalogue {
         System.out.println("\nTools in the catalogue:");
         for (Tool tool : tools) {
             System.out.println("- " + tool.getName() + " (" + tool.getCategory()
-                    + ", " + tool.getCatalogueGroup() + ") [" + tool.getVerificationStatus() + "]");
+                    + ") [" + tool.getVerificationStatus() + "]");
         }
     }
 }
@@ -152,7 +148,6 @@ public class App {
             } else {
                 System.out.println("\nTool: " + tool.getName());
                 System.out.println("Category: " + tool.getCategory());
-                System.out.println("Catalogue group: " + tool.getCatalogueGroup());
                 System.out.println("Purpose: " + tool.getPurpose());
                 System.out.println("Safety notes: " + tool.getSafetyNotes());
                 System.out.println("Verification status: "
