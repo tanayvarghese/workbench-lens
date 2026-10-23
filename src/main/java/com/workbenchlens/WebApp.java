@@ -24,11 +24,19 @@ public final class WebApp {
     private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws IOException {
+        if (System.getenv("WORKBENCH_DB_PASSWORD") == null || System.getenv("WORKBENCH_DB_PASSWORD").isBlank()) {
+            System.err.println("Set WORKBENCH_DB_PASSWORD to the Oracle WORKBENCH password before starting Workbench Lens.");
+            return;
+        }
         int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.createContext("/", WebApp::servePage);
         server.createContext("/api/connect", WebApp::connect);
         server.createContext("/api/ask", WebApp::ask);
+        server.createContext("/api/register", WebApp::register);
+        server.createContext("/api/login", WebApp::login);
+        server.createContext("/api/logout", WebApp::logout);
+        server.createContext("/api/admin/users", WebApp::adminUsers);
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         server.start();
         System.out.println("Workbench Lens is available at http://localhost:" + port);
@@ -43,7 +51,9 @@ public final class WebApp {
         exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
         exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
-        exchange.getResponseHeaders().set("Set-Cookie", "WLSESSION=" + UUID.randomUUID() + "; HttpOnly; SameSite=Strict; Path=/");
+        String token = sessionToken(exchange);
+        if (token == null) token = UUID.randomUUID().toString();
+        exchange.getResponseHeaders().set("Set-Cookie", "WLSESSION=" + token + "; HttpOnly; SameSite=Strict; Path=/");
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
         exchange.sendResponseHeaders(200, page.length);
         try (var out = exchange.getResponseBody()) { out.write(page); }
@@ -59,7 +69,8 @@ public final class WebApp {
             String password = body.path("password").asText("");
             if (password.isBlank() || password.length() > 512) { send(exchange, 400, "application/json", "{\"error\":\"Enter your Oracle password.\"}"); return; }
             List<Tool> tools = new ToolRepository().loadTools(password);
-            SESSIONS.put(token, new Session(tools));
+            Session old = SESSIONS.get(token);
+            SESSIONS.put(token, new Session(old == null ? null : old.user, tools));
             sendJson(exchange, 200, Map.of("connected", true, "toolCount", tools.size(), "tools", toolSummaries(tools)));
         } catch (SQLException e) {
             send(exchange, 400, "application/json", "{\"error\":\"Could not connect to Oracle. Check the password and local database, then try again.\"}");
@@ -68,11 +79,52 @@ public final class WebApp {
         }
     }
 
+    private static void register(HttpExchange x) throws IOException {
+        if (!"POST".equals(x.getRequestMethod())) { send(x,405,"application/json","{\"error\":\"POST required\"}"); return; }
+        String token=sessionToken(x); if(token==null){send(x,403,"application/json","{\"error\":\"Refresh the page and try again.\"}");return;}
+        char[] password=null;
+        try {
+            JsonNode b=JSON.readTree(readLimited(x,16*1024)); String username=b.path("username").asText("").trim();
+            String email=b.path("email").asText("").trim(); password=b.path("password").asText("").toCharArray();
+            if(!username.matches("[A-Za-z0-9_.-]{3,50}") || !email.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+") || password.length<10){send(x,400,"application/json","{\"error\":\"Use a 3-50 character username, valid email, and password of at least 10 characters.\"}");return;}
+            UserRepository.User u=new UserRepository().register(username,email,password); password=null;
+            String authenticatedToken=UUID.randomUUID().toString(); SESSIONS.remove(token); SESSIONS.put(authenticatedToken,new Session(u,null)); setSessionCookie(x,authenticatedToken);
+            sendJson(x,201,Map.of("username",u.username(),"role",u.role()));
+        } catch(SQLException e){send(x,400,"application/json",JSON.writeValueAsString(Map.of("error",e.getMessage())));}
+          catch(Exception e){send(x,400,"application/json","{\"error\":\"Registration failed. Check database setup and input.\"}");}
+        finally {if(password!=null) java.util.Arrays.fill(password,'\0');}
+    }
+
+    private static void login(HttpExchange x) throws IOException {
+        if (!"POST".equals(x.getRequestMethod())) { send(x,405,"application/json","{\"error\":\"POST required\"}"); return; }
+        String token=sessionToken(x); if(token==null){send(x,403,"application/json","{\"error\":\"Refresh the page and try again.\"}");return;}
+        char[] password=null;
+        try {JsonNode b=JSON.readTree(readLimited(x,16*1024));password=b.path("password").asText("").toCharArray();
+            UserRepository.User u=new UserRepository().authenticate(b.path("username").asText(""),password);password=null;
+            String authenticatedToken=UUID.randomUUID().toString(); SESSIONS.remove(token); SESSIONS.put(authenticatedToken,new Session(u,null));setSessionCookie(x,authenticatedToken);
+            sendJson(x,200,Map.of("username",u.username(),"role",u.role()));
+        }catch(SQLException e){send(x,401,"application/json",JSON.writeValueAsString(Map.of("error",e.getMessage())));}
+         catch(Exception e){send(x,400,"application/json","{\"error\":\"Login failed. Check the request and database connection.\"}");}
+        finally {if(password!=null) java.util.Arrays.fill(password,'\0');}
+    }
+
+    private static void logout(HttpExchange x) throws IOException {String t=sessionToken(x);if(t!=null)SESSIONS.remove(t);String fresh=UUID.randomUUID().toString();setSessionCookie(x,fresh);sendJson(x,200,Map.of("loggedOut",true));}
+
+    private static void setSessionCookie(HttpExchange x,String token) { x.getResponseHeaders().set("Set-Cookie","WLSESSION="+token+"; HttpOnly; SameSite=Strict; Path=/"); }
+
+    private static void adminUsers(HttpExchange x) throws IOException {
+        String t=sessionToken(x); Session s=t==null?null:SESSIONS.get(t);
+        if(s==null||s.user==null||!"ADMIN".equals(s.user.role())){send(x,403,"application/json","{\"error\":\"Administrator access required.\"}");return;}
+        try{sendJson(x,200,Map.of("users",new UserRepository().listUsers()));}
+        catch(SQLException e){send(x,500,"application/json","{\"error\":\"Could not load users.\"}");}
+    }
+
     private static void ask(HttpExchange exchange) throws IOException {
         if (!"POST".equals(exchange.getRequestMethod())) { send(exchange, 405, "application/json", "{\"error\":\"POST required\"}"); return; }
         String token = sessionToken(exchange);
         Session session = token == null ? null : SESSIONS.get(token);
-        if (session == null) { send(exchange, 401, "application/json", "{\"error\":\"Connect to Oracle first.\"}"); return; }
+        if (session == null || session.user == null) { send(exchange, 401, "application/json", "{\"error\":\"Log in first.\"}"); return; }
+        if (session.tools == null) { send(exchange, 401, "application/json", "{\"error\":\"Connect to Oracle catalogue first.\"}"); return; }
         JsonNode body;
         try {
             body = JSON.readTree(readLimited(exchange, MAX_IMAGE_BYTES + 512 * 1024));
@@ -117,13 +169,13 @@ public final class WebApp {
 
     private static List<Map<String, String>> toolSummaries(List<Tool> tools) {
         List<Map<String, String>> result = new ArrayList<>();
-        for (Tool tool : tools) result.add(Map.of("name", safe(tool.getName()), "category", safe(tool.getCategory()), "status", safe(tool.getVerificationStatus())));
+        for (Tool tool : tools) result.add(Map.of("name", safe(tool.getName()), "category", safe(tool.getCategory()), "group", safe(tool.getCatalogueGroup()), "purpose", safe(tool.getPurpose()), "safetyNotes", safe(tool.getSafetyNotes()), "status", safe(tool.getVerificationStatus())));
         return result;
     }
 
     private static String catalogueContext(List<Tool> tools) {
         StringBuilder result = new StringBuilder();
-        for (Tool tool : tools) result.append("Tool: ").append(safe(tool.getName())).append("\nCategory: ").append(safe(tool.getCategory())).append("\nPurpose: ").append(safe(tool.getPurpose())).append("\nSafety notes: ").append(safe(tool.getSafetyNotes())).append("\nVerification status: ").append(safe(tool.getVerificationStatus())).append("\n\n");
+        for (Tool tool : tools) result.append("Tool: ").append(safe(tool.getName())).append("\nCategory: ").append(safe(tool.getCategory())).append("\nCatalogue group: ").append(safe(tool.getCatalogueGroup())).append("\nPurpose: ").append(safe(tool.getPurpose())).append("\nSafety notes: ").append(safe(tool.getSafetyNotes())).append("\nVerification status: ").append(safe(tool.getVerificationStatus())).append("\n\n");
         return result.toString();
     }
 
@@ -158,5 +210,5 @@ public final class WebApp {
         exchange.sendResponseHeaders(status, data.length); try (var out = exchange.getResponseBody()) { out.write(data); }
     }
 
-    private record Session(List<Tool> tools) { }
+    private record Session(UserRepository.User user, List<Tool> tools) { }
 }
