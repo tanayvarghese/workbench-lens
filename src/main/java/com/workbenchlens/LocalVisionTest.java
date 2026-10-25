@@ -17,7 +17,7 @@ public class LocalVisionTest {
         if (console == null) {
             System.out.println("Run this using the VS Code Run button.");
             return;
-        }
+        }   
 
         try {
             String imageName = console.readLine("Enter the full path to a tool photo: ");

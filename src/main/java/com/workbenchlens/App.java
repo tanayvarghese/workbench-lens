@@ -3,7 +3,6 @@ package com.workbenchlens;
 import java.io.Console;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -72,7 +71,23 @@ class MeasuringTool extends Tool {
         super(name, category, purpose, safetyNotes, verificationStatus, catalogueGroup);
     }
 }
+class KitchenTool extends Tool {
+    public KitchenTool(String name, String category, String purpose,
+                       String safetyNotes, String verificationStatus,
+                       String catalogueGroup) {
+        super(name, category, purpose, safetyNotes,
+              verificationStatus, catalogueGroup);
+    }
+}
 
+class GardenTool extends Tool {
+    public GardenTool(String name, String category, String purpose,
+                      String safetyNotes, String verificationStatus,
+                      String catalogueGroup) {
+        super(name, category, purpose, safetyNotes,
+              verificationStatus, catalogueGroup);
+    }
+}
 class ToolCatalogue {
     private final List<Tool> tools = new ArrayList<>();
     private final Map<String, Tool> toolsByName = new HashMap<>();
